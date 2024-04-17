@@ -1,2 +1,3 @@
 # salaries_prediction
- Predict professor salaries from dataset.
+
+The objective of this project is to analyze the Salaries.csv dataset, which contains salary information for 397 university professors in the USA over nine months during 2008 and 2009. The dataset includes variables such as professor rank, discipline, years since obtaining a PhD, years of service, gender, and salary. The primary goal is to implement a regularized linear model to predict professor salaries based on these variables. Through thorough data exploration and statistical analysis, insights will be gained into the factors influencing salary variations among university professors.
