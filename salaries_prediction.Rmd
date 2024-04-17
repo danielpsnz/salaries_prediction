@@ -1,0 +1,220 @@
+---
+title: "Caso Pŕactico Final Evaluable"
+output:
+  html_document: default
+  html_notebook: default
+  pdf_document: default
+---
+
+We will take the dataset Salaries.csv.
+
+The dataset consists of the salaries of nine months collected from 397 university professors in the USA during 2008 and 2009. In addition to salaries, the professor's rank, gender, discipline, years since PhD, and years of service were also collected. Thus, there are a total of 6 variables, which are described below.
+
+The objective of this practice is to conduct a comprehensive study of the dataset to eventually implement a regularized linear model that makes predictions about a professor's salary. Additionally, students will be asked to leverage the explainability of these models and the statistical studies conducted to gain insights and dependencies in the data. We load the data, and we conduct an inspection by variables of the salary distribution based on each attribute visually.
+
+```{r}
+df <- read.csv('Salaries.csv', na.strings = "?")
+str(df)
+```
+```{r}
+dim(df)
+```
+
+```{r}
+head(df)
+```
+
+We convert all categorical variables to factors and remove column X since it's not needed.
+
+```{r}
+df$rank <- as.factor(df$rank)
+df$sex <- as.factor(df$sex)
+df$discipline <- as.factor(df$discipline)
+```
+
+We verify that the variables have been formatted correctly:
+
+```{r}
+str(df)
+```
+```{r}
+summary(df)
+```
+
+```{r}
+df$X <- NULL
+df
+```
+
+```{r}
+summary(df)
+```
+
+We visually inspect the distribution of salaries for each attribute. To do this, we load the ggplot library.
+
+```{r}
+library(ggplot2)
+
+ggplot(data=df, aes(x=salary, fill=rank) ) +
+    geom_histogram(alpha = 0.5, position="identity", bins = 30)
+```
+
+As expected, there is a tendency to have a higher salary if you have a higher rank.
+
+```{r}
+ggplot(data=df, aes(x=salary, fill=discipline) ) +
+    geom_histogram(alpha = 0.5, position="identity", bins = 30)
+```
+
+From this graph, we conclude that the professor's discipline does not impact salary.
+
+```{r}
+ggplot(df, aes(x = yrs.since.phd, y = salary)) +
+  geom_point(shape=1) +
+  geom_smooth(method=lm, level=0.99)
+```
+
+```{r}
+ggplot(df, aes(x = yrs.service, y = salary)) +
+  geom_point(shape=1) +
+  geom_smooth(method=lm, level=0.99)
+```
+
+There is a trend towards higher salary based on years of service and years since obtaining the PhD.
+
+```{r}
+ggplot(data=df, aes(x=salary, fill=sex) ) +
+    geom_histogram(alpha = 0.5, position="identity", bins = 30)
+```
+```{r}
+library(dplyr)
+
+women_data <- df %>% filter(sex == 'Female')
+maximum_salary_women <- max(women_data$salary)
+
+cat("The maximum salary of women is:", maximum_salary_women, "\n")
+```
+
+It's noteworthy that there are significantly fewer women than men. Additionally, the maximum salary earned by a woman does not exceed $165,000.
+
+We well check if we can use a parametric test to determine if the salary means between men and women are the same or different.We can use a parametric test, such as the Student's t-test, to determine if the salary means between men and women are the same or different. However, before applying the t-test, it's important to verify if the data meet the necessary assumptions for this type of test. The main assumption for the t-test is:
+- Normality: The data should come from a normal distribution. We can use graphical methods, such as a Q-Q plot (quantile-quantile plot), or statistical tests, such as the Shapiro-Wilk normality test.
+
+```{r}
+# We verify normality with the Q-Q plot
+ggplot(df, aes(sample = salary, color = sex)) +
+  geom_qq() +
+  ggtitle("Q-Q Plot of salaries by gender")
+```
+
+```{r}
+# Normality test of Shapiro-Wilk
+shapiro_test_men <- shapiro.test(df$salary[df$sex == "Male"])
+shapiro_test_women <- shapiro.test(df$salary[df$sex == "Female"])
+```
+
+```{r}
+# Print results
+cat("Shapiro-Wilk test for men:", shapiro_test_men$p.value, "\n")
+```
+
+```{r}
+cat("Shapiro-Wilk test for women:", shapiro_test_women$p.value, "\n")
+```
+
+In this case, the p-values are greater than 0.05, therefore we accept the corresponding null hypotheses H0, meaning that the samples come from a population with a distribution that can be approximated by a normal distribution.
+
+```{r}
+# We perform the t-student test.
+t_test_result <- t.test(salary ~ sex, data = df)
+cat("Student's t-test to compare salary means between men and women:\n")
+print(t_test_result)
+```
+The null hypothesis (H0) in this case would be that there is no significant difference in salary means between men and women. The alternative hypothesis (H1) would be that there is a significant difference. Since the p-value (0.002664) is less than the commonly used significance level of 0.05, there is sufficient evidence to reject the null hypothesis.
+
+The conclusion is that there is a significant difference in salary means between men and women. Furthermore, the estimate of the difference between the means is approximately \$10,088.0, with a 95% confidence interval ranging from -\$23,037.92 to -\$5,138.10. This suggests that, on average, men earn more than women in this dataset.
+
+We divide the dataset, taking the first 317 instances as train and the last 80 as test. We train a linear regression model with Ridge and Lasso regularization on train, selecting the one with the lowest Mean Squared Error (MSE). We then evaluate the metrics on test. Regarding the use of One Hot Encoder, its usefulness lies in handling categorical variables with more than two categories. By encoding them into binary vectors, it ensures that the model can interpret these variables correctly. This is crucial for algorithms like linear regression, which assume numerical inputs. Therefore, employing One Hot Encoder can improve the model's performance, especially when dealing with categorical features like rank and discipline in this dataset.
+
+First, we will count the missing values:
+
+```{r}
+sapply(df, function(x) sum(is.na(x)))
+```
+
+Observing that there are no missing values, we proceed to perform One Hot Encoding on the 'sex' variable. When you have categorical variables in your dataset (e.g., variables representing gender, country, product type, etc.), many machine learning algorithms require these variables to be converted into a numerical form. One-Hot Encoding is an effective way to perform this conversion. One-Hot Encoding preserves the information of the original categories by converting them into separate binary columns. Each category is represented as a column, and a value of 0 or 1 is assigned depending on whether the observation belongs to that category or not.
+
+```{r}
+dfOHE <- model.matrix(~., df)
+head(dfOHE)
+```
+
+We split the dataset into training and testing sets. Then, we create the X_train/y_train and X_test/y_test splits. Finally, we fit Ridge and Lasso models to see their performances.
+
+```{r}
+X <- data.matrix(dfOHE)
+dim(X)
+```
+
+```{r}
+X_train <- X[1:317,]
+y_train <- y[1:317]
+X_test <- X[318:397,]
+y_test <- y[318:397]
+```
+
+We apply Ridge regularization.
+
+```{r}
+library(glmnet)
+```
+```{r}
+set.seed(42)
+cv.ridge <- cv.glmnet(X_train, y_train, family='gaussian', alpha=0, type.measure='mse')
+# Results
+plot(cv.ridge)
+```
+
+
+```{r}
+# This is the best value of lambda.
+cv.ridge$lambda.min
+```
+
+```{r}
+# This is the estimated error value for the minimum lambda value given in MSE.
+min(cv.ridge$cvm)
+```
+
+We observe that the regularized Ridge model with the optimal λ has an MSE of 11353212.
+Now, we apply Lasso. To execute a Lasso sparse model, we simply have to change Alpha=0 in the glmnet function and apply it just like in the Ridge case.
+
+```{r}
+set.seed(42)
+cv.lasso <- cv.glmnet(X_train, y_train, family='gaussian', alpha=1, type.measure='mse')
+# Results
+plot(cv.lasso)
+```
+```{r}
+# This is the best value of lambda.
+cv.lasso$lambda.min
+```
+
+```{r}
+# This is the estimated error value for the minimum lambda value given in MSE.
+min(cv.lasso$cvm)
+```
+
+We observe that the regularized Lasso model with the optimal λ has an MSE of 778836.5. Since the MSE of the Lasso model is lower than that of Ridge, we stick with the Lasso regularization model. Let's examine the coefficients of the optimal model obtained by Lasso regularization.
+
+```{r}
+coef(cv.lasso, s=cv.lasso$lambda.min)
+```
+
+We calculate the prediction on the test set and its metrics. We display the predictions and the corresponding actual values.
+
+```{r}
+y_pred <- predict.glmnet(cv.lasso$glmnet.fit, newx=X_test, s=cv.lasso$lambda.min)
+y_pred
+```
+
